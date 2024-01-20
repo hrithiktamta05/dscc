@@ -1,0 +1,2273 @@
+//Implementing a Simple Echo Chat Server Using Java Server Socket API
+
+EchoServer.java
+
+import java.io.*;
+
+import java.net.*;
+
+import java.util.*;
+
+public class EchoServer {
+
+ public static void main(String args[]) throws IOException {
+
+  // Create a server socket on port 8189
+
+  ServerSocket serverSocket = new ServerSocket(8189);
+
+  System.out.println("I am about to listen on 8189");
+
+  // Accept a client connection
+
+  Socket clientSocket = serverSocket.accept();
+
+  // Get input and output streams from the client socket
+
+  InputStream inputStream = clientSocket.getInputStream();
+
+  OutputStream outputStream = clientSocket.getOutputStream();
+
+  // Create a Scanner to read from the input stream and a PrintWriter to write to the output stream
+
+  Scanner scanner = new Scanner(inputStream);
+
+  PrintWriter out = new PrintWriter(outputStream, true);
+
+  // Send an initial greeting message to the client
+
+  out.println("Hello!.. I am the chat server. Let's Chat. Say BYE to disconnect");
+
+  boolean bye = false;
+
+  // Continue reading input from the client and echoing back until "BYE" is received
+
+  while (!bye && scanner.hasNextLine()) {
+
+   String clientMessage = scanner.nextLine();
+
+   // Echo back the client's message with "Echo: " prefix
+
+   out.println("Echo: " + clientMessage);
+
+   // Check if the client wants to disconnect
+
+   if (clientMessage.trim().equals("BYE")) {
+
+    bye = true;
+
+   }
+
+  }
+
+  // Close the client socket and server socket
+
+  clientSocket.close();
+
+  serverSocket.close();
+
+ }
+
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+Multi-Threaded
+
+//Making the Echo Chat Server Multi-Threaded to Support Multiple Simultaneous Chatting Sessions
+
+EchoChatHandler.java
+
+import java.io.IOException;
+
+import java.io.InputStream;
+
+import java.io.OutputStream;
+
+import java.io.PrintWriter;
+
+import java.net.Socket;
+
+import java.util.Scanner;
+
+class EchoChatHandler implements Runnable {
+
+ private final Socket userSocket;
+
+ private int userId;
+
+ public EchoChatHandler(Socket userSocket, int userId) {
+
+  this.userSocket = userSocket;
+
+  this.userId = userId;
+
+ }
+
+ @Override
+
+ public void run() {
+
+  try {
+
+   InputStream inS = userSocket.getInputStream();
+
+   OutputStream outS = userSocket.getOutputStream();
+
+   Scanner in = new Scanner(inS);
+
+   PrintWriter out = new PrintWriter(outS, true);
+
+   out.println("Hello user " + userId + "! I am the chat server. Let's Chat. Say BYE to disconnect");
+
+   boolean bye = false;
+
+   while (!bye && in.hasNextLine()) {
+
+    String cMsg = in.nextLine();
+
+    out.println("Echo: " + cMsg);
+
+    if (cMsg.trim().equals("BYE")) {
+
+     bye = true;
+
+    }
+
+   }
+
+   userSocket.close();
+
+  } catch (IOException ioEX) {
+
+   ioEX.printStackTrace();
+
+  }
+
+ }
+
+}
+
+MultiUserEchoChatServer.java
+
+import java.io.IOException;
+
+import java.net.ServerSocket;
+
+import java.net.Socket;
+
+public class MultiUserEchoChatServer {
+
+ public static void main(String[] args) throws IOException {
+
+  ServerSocket server = new ServerSocket(8189);
+
+  System.out.println("I am about to listen on 8189");
+
+  int userCnt = 0;
+
+  while (true) {
+
+   Socket userSocket = server.accept();
+
+   userCnt++;
+
+   // Create a new EchoChatHandler for the connected user and start it in a separate thread
+
+   EchoChatHandler echoChatter = new EchoChatHandler(userSocket, userCnt);
+
+   Thread userChatThread = new Thread(echoChatter);
+
+   System.out.println("Spawning a new chatting thread for user " + userCnt);
+
+   userChatThread.start();
+
+  }
+
+ }
+
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Datagram
+
+
+
+
+
+
+
+// Using Datagram Socket API to Implement Number Addition Service
+
+AdditionClient.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.util.Scanner;
+
+public class AdditionClient {
+
+ public static void main(String[] args) {
+
+  try {
+
+   InetAddress addServiceIP = InetAddress.getLocalHost();
+
+   int addServicePort = 8189;
+
+   DatagramSocket clientSocket = new DatagramSocket();
+
+   Scanner sc = new Scanner(System.in);
+
+   System.out.println("Please enter the list of numbers: ");
+
+   String numberList = sc.nextLine();
+
+   DatagramPacket outDP = new DatagramPacket(numberList.getBytes(), numberList.length(), addServiceIP, addServicePort);
+
+   clientSocket.send(outDP);
+
+   System.out.println("Adding the numbers " + numberList + " together");
+
+   byte[] buffer = new byte[256];
+
+   DatagramPacket inDP = new DatagramPacket(buffer, buffer.length);
+
+   clientSocket.receive(inDP);
+
+   String servResp = new String(inDP.getData(), 0, inDP.getLength());
+
+   System.out.println(servResp);
+
+   String stop = "STOP";
+
+   outDP = new DatagramPacket(stop.getBytes(), stop.length(), addServiceIP, addServicePort);
+
+   clientSocket.send(outDP);
+
+   clientSocket.close();
+
+  } catch (IOException ioEX) {
+
+   System.out.println(ioEX);
+
+  }
+
+ }
+
+}
+
+AdditionServer.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.util.StringTokenizer;
+
+public class AdditionServer {
+
+ private int port = 8189;
+
+ public static void main(String[] args) {
+
+  AdditionServer addService = new AdditionServer();
+
+  addService.start();
+
+ }
+
+ public void start() {
+
+  try {
+
+   DatagramSocket serverConn = new DatagramSocket(port);
+
+   byte[] buffer = new byte[256];
+
+   DatagramPacket inDP = new DatagramPacket(buffer, buffer.length);
+
+   String clientReq, serverResp;
+
+   do {
+
+    serverConn.receive(inDP);
+
+    InetAddress clientAddress = inDP.getAddress();
+
+    int clientPort = inDP.getPort();
+
+    clientReq = new String(inDP.getData(), 0, inDP.getLength());
+
+    if (clientReq != null && !clientReq.trim().equals("STOP")) {
+
+     double sumResult = 0;
+
+     StringTokenizer st = new StringTokenizer(clientReq);
+
+     try {
+
+      while (st.hasMoreTokens()) {
+
+       Double d = new Double(st.nextToken());
+
+       sumResult += d.doubleValue();
+
+      }
+
+      serverResp = "The result is " + sumResult;
+
+     } catch (NumberFormatException nEx) {
+
+      serverResp = "Sorry, your list contains an invalid number";
+
+     }
+
+     DatagramPacket outDP = new DatagramPacket(serverResp.getBytes(), serverResp.length(),
+
+       clientAddress, clientPort);
+
+     serverConn.send(outDP);
+
+    }
+
+   } while (!clientReq.trim().equals("STOP"));
+
+   serverConn.close();
+
+  } catch (IOException ioex) {
+
+   System.out.println(ioex);
+
+  }
+
+ }
+
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Date Time Server using RPC
+
+
+
+UDP_Client.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.util.Scanner;
+
+public class UDP_Client {
+
+ public static void main(String[] args) {
+
+  try {
+
+   Scanner sc = new Scanner(System.in);
+
+   DatagramSocket ds = new DatagramSocket();
+
+   InetAddress ip = InetAddress.getLocalHost();
+
+   byte[] buf;
+
+   while (true) {
+
+    System.out.println("What do you want to know? Date / Time");
+
+    String inp = sc.nextLine();
+
+    buf = inp.getBytes();
+
+    DatagramPacket DpSend = new DatagramPacket(buf, buf.length, ip, 1234);
+
+    ds.send(DpSend);
+
+    if (inp.equals("BYE"))
+
+     break;
+
+    buf = new byte[65535];
+
+    DatagramPacket DpReceive = new DatagramPacket(buf, buf.length);
+
+    ds.receive(DpReceive);
+
+    System.out.println(inp + ": " + new String(buf, 0, DpReceive.getLength()));
+
+   }
+
+   ds.close();
+
+  } catch (IOException e) {
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+UDP_Server.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.text.DateFormat;
+
+import java.text.SimpleDateFormat;
+
+import java.util.Date;
+
+public class UDP_Server {
+
+ public static void main(String[] args) {
+
+  try {
+
+   DatagramSocket ds = new DatagramSocket(1234);
+
+   System.out.println("The chat server is listening on port 1234.");
+
+   DateFormat forDate = new SimpleDateFormat("yyyy/MM/dd");
+
+   DateFormat forTime = new SimpleDateFormat("hh:mm:ss");
+
+   byte[] buf;
+
+   while (true) {
+
+    buf = new byte[65535];
+
+    DatagramPacket DpReceive = new DatagramPacket(buf, buf.length);
+
+    ds.receive(DpReceive);
+
+    String inp = new String(buf, 0, DpReceive.getLength()).trim();
+
+    if (inp.equals("BYE")) {
+
+     System.out.println("Client is saying Bye... exiting");
+
+     break;
+
+    }
+
+    Date date = new Date();
+
+    String toReturn = "";
+
+    if (inp.equals("Date"))
+
+     toReturn = forDate.format(date);
+
+    else if (inp.equals("Time"))
+
+     toReturn = forTime.format(date);
+
+    System.out.println("Sending result ...");
+
+    buf = toReturn.getBytes();
+
+    InetAddress clientAddress = DpReceive.getAddress();
+
+    int clientPort = DpReceive.getPort();
+
+    DatagramPacket DpSend = new DatagramPacket(buf, buf.length, clientAddress, clientPort);
+
+    ds.send(DpSend);
+
+   }
+
+   ds.close();
+
+  } catch (IOException e) {
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+RPC
+
+
+
+
+
+
+
+//7.	To implement a Server calculator using RPC concept. (Make use of datagram)
+
+UDP_Client.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.util.Scanner;
+
+public class Client {
+
+ public static void main(String[] args) throws IOException {
+
+  Scanner sc = new Scanner(System.in);
+
+  DatagramSocket ds = new DatagramSocket();
+
+  InetAddress serverIp = InetAddress.getLocalHost();
+
+  while (true) {
+
+   System.out.println("Enter the equation in the format:");
+
+   System.out.println("'Operand1 Operator Operand2'");
+
+   String input = sc.nextLine();
+
+   byte[] sendData = input.getBytes();
+
+   DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverIp, 1234);
+
+   ds.send(sendPacket);
+
+   if (input.equalsIgnoreCase("Exit")) {
+
+    System.out.println("Exiting client.");
+
+    break;
+
+   }
+
+   byte[] receiveData = new byte[65535];
+
+   DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+
+   ds.receive(receivePacket);
+
+   String result = new String(receivePacket.getData(), 0, receivePacket.getLength());
+
+   System.out.println("Answer: " + result);
+
+  }
+
+  sc.close();
+
+  ds.close();
+
+ }
+
+}
+
+UDP_Server.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.util.StringTokenizer;
+
+public class Server {
+
+ public static void main(String[] args) throws IOException {
+
+  DatagramSocket ds = new DatagramSocket(1234);
+
+  while (true) {
+
+   byte[] receiveData = new byte[65535];
+
+   DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+
+   ds.receive(receivePacket);
+
+   String input = new String(receivePacket.getData(), 0, receivePacket.getLength()).trim();
+
+   System.out.println("Equation Received: " + input);
+
+   if (input.equalsIgnoreCase("Exit")) {
+
+    System.out.println("Server exiting.");
+
+    break;
+
+   }
+
+   int result = evaluateEquation(input);
+
+   String resultStr = Integer.toString(result);
+
+   byte[] sendData = resultStr.getBytes();
+
+   DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length,
+
+     receivePacket.getAddress(), receivePacket.getPort());
+
+   ds.send(sendPacket);
+
+  }
+
+  ds.close();
+
+ }
+
+ private static int evaluateEquation(String equation) {
+
+  StringTokenizer st = new StringTokenizer(equation);
+
+  int operand1 = Integer.parseInt(st.nextToken());
+
+  String operator = st.nextToken();
+
+  int operand2 = Integer.parseInt(st.nextToken());
+
+  switch (operator) {
+
+   case "+":
+
+    return operand1 + operand2;
+
+   case "-":
+
+    return operand1 - operand2;
+
+   case "*":
+
+    return operand1 * operand2;
+
+   case "/":
+
+    if (operand2 != 0) {
+
+     return operand1 / operand2;
+
+    } else {
+
+     System.out.println("Error: Division by zero");
+
+     return 0; // Handle division by zero error
+
+    }
+
+   default:
+
+    System.out.println("Error: Invalid operator");
+
+    return 0; // Handle invalid operator error
+
+  }
+
+ }
+
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+SOCKET PROGRAMMING
+
+
+
+
+
+
+
+//Using TELNET Client to Communicate with NIST Time
+
+HelloSocketProgramming.java
+
+import java.io.IOException;
+
+import java.net.Socket;
+
+import java.util.Scanner;
+
+public class HelloSocketProgramming {
+
+ public static void main(String args[]) {
+
+ try (Socket s = new Socket("time.nist.gov", 13);
+
+  Scanner ins = new Scanner(s.getInputStream())) {
+
+  while (ins.hasNextLine()) {
+
+  System.out.println(ins.nextLine());
+
+  }
+
+ } catch (IOException e) {
+
+  e.printStackTrace();
+
+ }
+
+ }
+
+}
+
+//Implementing a Java Program to Convert Between Domain Name and IP Address.
+
+SocketProgram_Q3.java
+
+import java.net.InetAddress;
+
+import java.net.UnknownHostException;
+
+public class SocketProgram_Q3 {
+
+ public static void main(String args[]) throws UnknownHostException {
+
+ if (args.length > 0) {
+
+  String domainName = args[0];
+
+  // Get all IP addresses associated with the specified domain name
+
+  InetAddress[] inetAddresses = InetAddress.getAllByName(domainName);
+
+  // Print each IP address
+
+  for (InetAddress address : inetAddresses) {
+
+  System.out.println(address);
+
+  }
+
+ } else {
+
+  // If no command-line argument is provided, print the local host's IP address
+
+  System.out.println(InetAddress.getLocalHost());
+
+ }
+
+ }
+
+}
+
+//Using Socket API to Implement Java Client to Communicate with NIST Time of the Day Service
+
+hellosocketprogramming_q1.java
+
+import java.io.IOException;
+
+import java.net.Socket;
+
+import java.util.Scanner;
+
+public class hellosocketprogramming_q1 {
+
+ public static void main(String args[]) throws IOException {
+
+ // Create a socket connection to the NIST time server on port 13
+
+ Socket s = new Socket("time.nist.gov", 13);
+
+ // Create a Scanner to read from the input stream of the socket
+
+ Scanner ins = new Scanner(s.getInputStream());
+
+ // Read and print lines from the server's response
+
+ while (ins.hasNextLine()) {
+
+  System.out.println(ins.nextLine());
+
+ }
+
+ // Close the socket (not shown in your code, but it's good practice to close resources)
+
+ s.close();
+
+ }
+
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+client server chat application
+
+
+
+//Implement a simple client server chat application using Socket API
+
+Client_Q1.java
+
+import java.io.BufferedReader;
+
+import java.io.DataOutputStream;
+
+import java.io.IOException;
+
+import java.io.InputStreamReader;
+
+import java.net.Socket;
+
+import java.net.UnknownHostException;
+
+public class Client_Q1 {
+
+ private Socket socket = null;
+
+ private BufferedReader input = null;
+
+ private DataOutputStream output = null;
+
+ public Client_Q1(String address, int port) {
+
+  try {
+
+   socket = new Socket(address, port);
+
+   System.out.println("Connected to the server");
+
+   input = new BufferedReader(new InputStreamReader(System.in));
+
+   output = new DataOutputStream(socket.getOutputStream());
+
+  } catch (UnknownHostException u) {
+
+   System.out.println("Host not found: " + u.getMessage());
+
+  } catch (IOException i) {
+
+   System.out.println("Error establishing connection: " + i.getMessage());
+
+  }
+
+  String line = "";
+
+  while (!line.equals("Over")) {
+
+   try {
+
+    System.out.print("Client: ");
+
+    line = input.readLine();
+
+    output.writeUTF(line);
+
+   } catch (IOException i) {
+
+    System.out.println("Error sending message: " + i.getMessage());
+
+   }
+
+  }
+
+  try {
+
+   input.close();
+
+   output.close();
+
+   socket.close();
+
+   System.out.println("Connection closed");
+
+  } catch (IOException i) {
+
+   System.out.println("Error closing resources: " + i.getMessage());
+
+  }
+
+ }
+
+ public static void main(String args[]) {
+
+  Client_Q1 client = new Client_Q1("127.0.0.1", 5000);
+
+ }
+
+}
+
+Server_Q1.java
+
+import java.io.DataInputStream;
+
+import java.io.IOException;
+
+import java.net.ServerSocket;
+
+import java.net.Socket;
+
+public class Server_Q1 {
+
+ private ServerSocket server = null;
+
+ private Socket socket = null;
+
+ private DataInputStream in = null;
+
+ public Server_Q1(int port) {
+
+  try {
+
+   server = new ServerSocket(port);
+
+   System.out.println("Server started, waiting for clients...");
+
+   socket = server.accept();
+
+   System.out.println("Client connected");
+
+   in = new DataInputStream(socket.getInputStream());
+
+   String line = "";
+
+   while (!line.equals("Over")) {
+
+    try {
+
+     line = in.readUTF();
+
+     System.out.println("Client: " + line);
+
+    } catch (IOException i) {
+
+     System.out.println("Error reading message: " + i.getMessage());
+
+    }
+
+   }
+
+   System.out.println("Closing connection");
+
+   socket.close();
+
+   in.close();
+
+   server.close();
+
+  } catch (IOException e) {
+
+   System.out.println("Error starting the server: " + e.getMessage());
+
+  }
+
+ }
+
+ public static void main(String args[]) {
+
+  Server_Q1 server = new Server_Q1(5000);
+
+ }
+
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+multi-client chat server
+
+
+
+
+
+
+
+//6.	To develop a program for multi-client chat server
+
+ClientHandler.java
+
+class ClientHandler implements Runnable {
+
+ private String name;
+
+ final DataInputStream dis;
+
+ final DataOutputStream dos;
+
+ Socket s;
+
+ boolean isloggedin;
+
+ // Constructor
+
+ public ClientHandler(Socket s, String name, DataInputStream dis, DataOutputStream dos) {
+
+  this.dis = dis;
+
+  this.dos = dos;
+
+  this.name = name;
+
+  this.s = s;
+
+  this.isloggedin = true;
+
+ }
+
+ @Override
+
+ public void run() {
+
+  String received;
+
+  while (true) {
+
+   try {
+
+    // Receive the string
+
+    received = dis.readUTF();
+
+    System.out.println(received);
+
+    if (received.equals("logout")) {
+
+     this.isloggedin = false;
+
+     this.s.close();
+
+     break;
+
+    }
+
+    // Break the string into message and recipient parts
+
+    String[] tokens = received.split("#");
+
+    String msgToSend = tokens[0];
+
+    String recipient = tokens[1];
+
+    // Search for the recipient in the connected devices list.
+
+    // ar is the vector storing clients of active users
+
+    for (ClientHandler mc : MultiChatServer.ar) {
+
+     // If the recipient is found, write on its
+
+     // output stream
+
+     if (mc.name.equals(recipient) && mc.isloggedin) {
+
+      mc.dos.writeUTF(this.name + ": " + msgToSend);
+
+      break;
+
+     }
+
+    }
+
+   } catch (IOException e) {
+
+    e.printStackTrace();
+
+   }
+
+  }
+
+  try {
+
+   // Closing resources
+
+   this.dis.close();
+
+   this.dos.close();
+
+  } catch (IOException e) {
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+MultiChatClient.java
+
+import java.io.DataInputStream;
+
+import java.io.DataOutputStream;
+
+import java.io.IOException;
+
+import java.net.InetAddress;
+
+import java.net.Socket;
+
+import java.net.UnknownHostException;
+
+import java.util.Scanner;
+
+public class MultiChatClient {
+
+ final static int ServerPort = 1234;
+
+ public static void main(String args[]) {
+
+  try {
+
+   Scanner scn = new Scanner(System.in);
+
+   // Getting localhost IP
+
+   InetAddress ip = InetAddress.getByName("localhost");
+
+   // Establish the connection
+
+   Socket s = new Socket(ip, ServerPort);
+
+   // Obtaining input and output streams
+
+   DataInputStream dis = new DataInputStream(s.getInputStream());
+
+   DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+
+   // sendMessage thread
+
+   Thread sendMessage = new Thread(() -> {
+
+    while (true) {
+
+     // Read the message to deliver.
+
+     String msg = scn.nextLine();
+
+     try {
+
+      dos.writeUTF(msg);
+
+     } catch (IOException e) {
+
+      e.printStackTrace();
+
+     }
+
+    }
+
+   });
+
+   // readMessage thread
+
+   Thread readMessage = new Thread(() -> {
+
+    while (true) {
+
+     try {
+
+      // Read the message sent to this client
+
+      String msg = dis.readUTF();
+
+      System.out.println(msg);
+
+     } catch (IOException e) {
+
+      e.printStackTrace();
+
+     }
+
+    }
+
+   });
+
+   sendMessage.start();
+
+   readMessage.start();
+
+  } catch (UnknownHostException e) {
+
+   e.printStackTrace();
+
+  } catch (IOException e) {
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+MultiChatServer.java
+
+import java.io.DataInputStream;
+
+import java.io.DataOutputStream;
+
+import java.io.IOException;
+
+import java.net.ServerSocket;
+
+import java.net.Socket;
+
+import java.util.Vector;
+
+public class MultiChatServer {
+
+ // Vector to store active clients
+
+ static Vector<ClientHandler> ar = new Vector<>();
+
+ // Counter for clients
+
+ static int i = 0;
+
+ public static void main(String[] args) {
+
+  try {
+
+   // Server is listening on port 1234
+
+   ServerSocket ss = new ServerSocket(1234);
+
+   // Running an infinite loop for getting client requests
+
+   while (true) {
+
+    // Accept the incoming request
+
+    Socket s = ss.accept();
+
+    System.out.println("New client request received: " + s);
+
+    // Obtain input and output streams
+
+    DataInputStream dis = new DataInputStream(s.getInputStream());
+
+    DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+
+    System.out.println("Creating a new handler for this client...");
+
+    // Create a new handler object for handling this request
+
+    ClientHandler mtch = new ClientHandler(s, "client " + i, dis, dos);
+
+    // Create a new Thread with this object
+
+    Thread t = new Thread(mtch);
+
+    System.out.println("Adding this client to active client list");
+
+    // Add this client to active clients
+
+    ar.add(mtch);
+
+    // Start the thread
+
+    t.start();
+
+    // Increment i for a new client.
+
+    // i is used for naming only and can be replaced
+
+    // by any naming scheme
+
+    i++;
+
+   }
+
+  } catch (IOException e) {
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+TOKEN-RING PROTOCOL
+
+
+
+
+
+
+
+//Using Datagram Socket API to Implement Token Ring Protocol to Enforce Distributed Mutual Exclusion
+
+TokenChatServer.java
+
+import java.io.IOException;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.SocketException;
+
+public class TokenChatServer {
+
+ private static DatagramSocket ds;
+
+ private static DatagramPacket dp;
+
+ public static void main(String[] args) throws IOException {
+
+  try {
+
+   ds = new DatagramSocket(1000);
+
+  } catch (SocketException ex) {
+
+   ex.printStackTrace();
+
+  }
+
+  while (true) {
+
+   byte buff[] = new byte[1024];
+
+   dp = new DatagramPacket(buff, buff.length);
+
+   ds.receive(dp);
+
+   String str = new String(dp.getData(), 0, dp.getLength());
+
+   System.out.println("Message From: " + str);
+
+  }
+
+ }
+
+}
+
+TokenClient1.java
+
+import java.io.BufferedReader;
+
+import java.io.IOException;
+
+import java.io.InputStreamReader;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.net.SocketException;
+
+public class TokenClient1 {
+
+ private static DatagramSocket ds;
+
+ private static DatagramPacket dp;
+
+ private static BufferedReader br;
+
+ public static void main(String[] args) throws IOException {
+
+  boolean hasToken = true;
+
+  try {
+
+   ds = new DatagramSocket(100);
+
+  } catch (SocketException ex) {
+
+   ex.printStackTrace();
+
+   throw ex;
+
+  }
+
+  while (true) {
+
+   if (hasToken) {
+
+    System.out.println("Do you want to say Something (i.e., Send Data) to Server?: Type Y for Yes/N for No");
+
+    br = new BufferedReader(new InputStreamReader(System.in));
+
+    String userResp = br.readLine();
+
+    if (userResp.equalsIgnoreCase("Y")) {
+
+     System.out.println("Enter what you want to send:");
+
+     String userData = "Client 1 ===> " + br.readLine();
+
+     System.out.println("Getting ready to send data ...");
+
+     byte buff[] = userData.getBytes();
+
+     System.out.println("Sending...");
+
+     ds.send(new DatagramPacket(buff, buff.length, InetAddress.getLocalHost(), 1000));
+
+     System.out.println("Data Sent.");
+
+    } else {
+
+     System.out.println("Since I am in busy state... passing token to client 2.");
+
+     String tokenMsg = "Token";
+
+     byte[] bf1 = new byte[1024];
+
+     bf1 = tokenMsg.getBytes();
+
+     ds.send(new DatagramPacket(bf1, bf1.length, InetAddress.getLocalHost(), 200));
+
+     hasToken = false;
+
+    }
+
+   } else {
+
+    System.out.println("Entering the receiving mode ...");
+
+    byte bf[] = new byte[1024];
+
+    ds.receive(dp = new DatagramPacket(bf, bf.length));
+
+    String msgClient3 = new String(dp.getData(), 0, dp.getLength());
+
+    System.out.println("The data received from left neighbor (client 3) is: " + msgClient3);
+
+    if (msgClient3.equalsIgnoreCase("Token")) {
+
+     hasToken = true;
+
+    }
+
+   }
+
+  }
+
+ }
+
+}
+
+TokenClient2.java
+
+import java.io.BufferedReader;
+
+import java.io.IOException;
+
+import java.io.InputStreamReader;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.net.SocketException;
+
+public class TokenClient2 {
+
+ private static DatagramSocket ds;
+
+ private static DatagramPacket dp;
+
+ private static BufferedReader br;
+
+ public static void main(String[] args) throws IOException {
+
+  boolean hasToken = false;
+
+  try {
+
+   ds = new DatagramSocket(200);
+
+  } catch (SocketException ex) {
+
+   ex.printStackTrace();
+
+   throw ex;
+
+  }
+
+  while (true) {
+
+   if (hasToken) {
+
+    System.out.println("Do you want to say something? (Type Y for Yes, N for No)");
+
+    br = new BufferedReader(new InputStreamReader(System.in));
+
+    String userResp = br.readLine();
+
+    if (userResp.equalsIgnoreCase("Y")) {
+
+     System.out.println("Enter what you want to send:");
+
+     String userData = "Client 2 ===> " + br.readLine();
+
+     System.out.println("Getting ready to send data ...");
+
+     byte buff[] = userData.getBytes();
+
+     System.out.println("Sending...");
+
+     ds.send(new DatagramPacket(buff, buff.length, InetAddress.getLocalHost(), 1000));
+
+     System.out.println("Data Sent.");
+
+    } else {
+
+     System.out.println("Since I am in busy state... passing token to client 3.");
+
+     String tokenMsg = "Token";
+
+     byte[] bf1 = new byte[1024];
+
+     bf1 = tokenMsg.getBytes();
+
+     ds.send(new DatagramPacket(bf1, bf1.length, InetAddress.getLocalHost(), 300));
+
+     hasToken = false;
+
+    }
+
+   } else {
+
+    System.out.println("Entering the receiving mode ...");
+
+    byte bf[] = new byte[1024];
+
+    ds.receive(dp = new DatagramPacket(bf, bf.length));
+
+    String msgClient1 = new String(dp.getData(), 0, dp.getLength());
+
+    System.out.println("The data received from left neighbor (client 1) is: " + msgClient1);
+
+    if (msgClient1.equalsIgnoreCase("Token")) {
+
+     hasToken = true;
+
+    }
+
+   }
+
+  }
+
+ }
+
+}
+
+TokenClient3.java
+
+import java.io.BufferedReader;
+
+import java.io.IOException;
+
+import java.io.InputStreamReader;
+
+import java.net.DatagramPacket;
+
+import java.net.DatagramSocket;
+
+import java.net.InetAddress;
+
+import java.net.SocketException;
+
+public class TokenClient3 {
+
+ private static DatagramSocket ds;
+
+ private static DatagramPacket dp;
+
+ private static BufferedReader br;
+
+ public static void main(String[] args) throws IOException {
+
+  boolean hasToken = false;
+
+  try {
+
+   ds = new DatagramSocket(300);
+
+  } catch (SocketException ex) {
+
+   ex.printStackTrace();
+
+   throw ex;
+
+  }
+
+  while (true) {
+
+   if (hasToken) {
+
+    System.out.println("Do you want to say something? (Type Y for Yes, N for No)");
+
+    br = new BufferedReader(new InputStreamReader(System.in));
+
+    String userResp = br.readLine();
+
+    if (userResp.equalsIgnoreCase("Y")) {
+
+     System.out.println("Enter what you want to send:");
+
+     String userData = "Client 3 ===> " + br.readLine();
+
+     System.out.println("Getting ready to send data ...");
+
+     byte buff[] = userData.getBytes();
+
+     System.out.println("Sending...");
+
+     ds.send(new DatagramPacket(buff, buff.length, InetAddress.getLocalHost(), 1000));
+
+     System.out.println("Data Sent.");
+
+    } else {
+
+     System.out.println("Since I am in busy state... passing token to client 1.");
+
+     String tokenMsg = "Token";
+
+     byte[] bf1 = new byte[1024];
+
+     bf1 = tokenMsg.getBytes();
+
+     ds.send(new DatagramPacket(bf1, bf1.length, InetAddress.getLocalHost(), 100));
+
+     hasToken = false;
+
+    }
+
+   } else {
+
+    System.out.println("Entering the receiving mode ...");
+
+    byte bf[] = new byte[1024];
+
+    ds.receive(dp = new DatagramPacket(bf, bf.length));
+
+    String msgClient2 = new String(dp.getData(), 0, dp.getLength());
+
+    System.out.println("The data received from left neighbor (client 2) is: " + msgClient2);
+
+    if (msgClient2.equalsIgnoreCase("Token")) {
+
+     hasToken = true;
+
+    }
+
+   }
+
+  }
+
+ }
+
+}
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+SQL-1 Library
+
+
+
+
+
+
+
+Client.java
+
+import java.rmi.registry.LocateRegistry;
+
+import java.rmi.registry.Registry;
+
+import java.util.List;
+
+public class Client {
+
+ public static void main(String[] args) {
+
+  try {
+
+   Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+
+   Hello stub = (Hello) registry.lookup("Hello");
+
+   List<Student> list = stub.getStudents();
+
+   for (Student s : list) {
+
+    System.out.println("ID: " + s.getId());
+
+    System.out.println("Name: " + s.getName());
+
+    System.out.println("Branch: " + s.getBranch());
+
+    System.out.println("Percentage: " + s.getPercent());
+
+    System.out.println("Email: " + s.getEmail());
+
+    System.out.println("------------");
+
+   }
+
+  } catch (Exception e) {
+
+   System.err.println("Client exception: " + e.toString());
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+Hello.java
+
+import java.rmi.registry.LocateRegistry;
+
+import java.rmi.registry.Registry;
+
+import java.util.List;
+
+public class Client {
+
+ public static void main(String[] args) {
+
+  try {
+
+   Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+
+   Hello stub = (Hello) registry.lookup("Hello");
+
+   List<Student> list = stub.getStudents();
+
+   for (Student s : list) {
+
+    System.out.println("ID: " + s.getId());
+
+    System.out.println("Name: " + s.getName());
+
+    System.out.println("Branch: " + s.getBranch());
+
+    System.out.println("Percentage: " + s.getPercent());
+
+    System.out.println("Email: " + s.getEmail());
+
+    System.out.println("------------");
+
+   }
+
+  } catch (Exception e) {
+
+   System.err.println("Client exception: " + e.toString());
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+ImplExample.java
+
+import java.rmi.RemoteException;
+
+import java.rmi.server.UnicastRemoteObject;
+
+import java.sql.*;
+
+import java.util.ArrayList;
+
+import java.util.List;
+
+public class ImplExample extends UnicastRemoteObject implements Hello {
+
+ public ImplExample() throws RemoteException {
+
+  super();
+
+ }
+
+ @Override
+
+ public List<Student> getStudents() throws RemoteException {
+
+  List<Student> list = new ArrayList<>();
+
+  String jdbcUrl = "jdbc:mysql://localhost:3306/details";
+
+  String username = "root";
+
+  String password = "admin";
+
+  try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password);
+
+    Statement stmt = conn.createStatement();
+
+    ResultSet rs = stmt.executeQuery("SELECT * FROM student_data")) {
+
+   while (rs.next()) {
+
+    int id = rs.getInt("id");
+
+    String name = rs.getString("name");
+
+    String branch = rs.getString("branch");
+
+    int percent = rs.getInt("percentage");
+
+    String email = rs.getString("email");
+
+    Student student = new Student();
+
+    student.setID(id);
+
+    student.setName(name);
+
+    student.setBranch(branch);
+
+    student.setPercent(percent);
+
+    student.setEmail(email);
+
+    list.add(student);
+
+   }
+
+  } catch (SQLException e) {
+
+   e.printStackTrace();
+
+   throw new RemoteException("Database error", e);
+
+  }
+
+  return list;
+
+ }
+
+}
+
+Server.java
+
+import java.rmi.registry.LocateRegistry;
+
+import java.rmi.registry.Registry;
+
+import java.rmi.RemoteException;
+
+public class Server {
+
+ public static void main(String args[]) {
+
+  try {
+
+   ImplExample obj = new ImplExample();
+
+   Registry registry = LocateRegistry.createRegistry(1099);
+
+   registry.rebind("Hello", obj);
+
+   System.err.println("Server ready");
+
+  } catch (RemoteException e) {
+
+   System.err.println("Server exception: " + e.toString());
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+howToRun.txt
+
+Step 1: Compile the Java Code
+
+Compile all the Java files using the javac command in the terminal or command prompt. Make sure you are in the directory where your Java files are located.
+
+bash
+
+javac Hello.java ImplExample.java Server.java Client.java Student.java
+
+Step 2: Start the RMI Registry (On the Server Side)
+
+Before running the server, you need to start the RMI registry. Open a new terminal or command prompt and run the following command:
+
+bash
+
+rmiregistry
+
+Step 3: Run the Server
+
+Open another terminal or command prompt and run the server:
+
+bash
+
+java Server
+
+The server should print "Server ready" if it starts successfully.
+
+Step 4: Run the Client
+
+Open another terminal or command prompt and run the client:
+
+bash
+
+java Client
+
+The client should connect to the server, retrieve the list of students from the MySQL database, and print their information.
+
+Note:
+
+ Make sure your MySQL server is running.
+
+ Ensure that the MySQL JDBC driver JAR file is included in your classpath.
+
+ Update the MySQL database connection details (URL, username, and password) in ImplExample.java.
+
+ Ensure that the RMI registry is started on the default port (1099).
+
+ If you encounter any issues, check for error messages in the terminal or command prompt to diagnose the problem.
+
+//////////////
+
+ Set up MySQL database and create the Book table:
+
+sql
+
+CREATE DATABASE Library;
+
+USE Library;
+
+CREATE TABLE Book (
+
+ Book_id INT PRIMARY KEY,
+
+ Book_name VARCHAR(255),
+
+ Book_author VARCHAR(255)
+
+);
+
+ Insert some sample data into the Book table:
+
+sql
+
+INSERT INTO Book (Book_id, Book_name, Book_author) VALUES
+
+(1, 'Book1', 'Author1'),
+
+(2, 'Book2', 'Author2'),
+
+(3, 'Book3', 'Author3');
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+SQl-2 Electricity Bill
+
+Client.java
+
+import java.rmi.registry.LocateRegistry;
+
+import java.rmi.registry.Registry;
+
+import java.util.List;
+
+public class Client {
+
+ private Client() {}
+
+ public static void main(String[] args) {
+
+  try {
+
+   Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+
+   Hello stub = (Hello) registry.lookup("Hello");
+
+   List<Student> list = stub.getStudents();
+
+   for (Student s : list) {
+
+    System.out.println("ID: " + s.getId());
+
+    System.out.println("Name: " + s.getName());
+
+    System.out.println("Branch: " + s.getBranch());
+
+    // Uncomment the following lines if you have these properties in your Student class
+
+    // System.out.println("Percentage: " + s.getPercent());
+
+    // System.out.println("Email: " + s.getEmail());
+
+    System.out.println("------------");
+
+   }
+
+  } catch (Exception e) {
+
+   System.err.println("Client exception: " + e.toString());
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+Hello.java
+
+import java.rmi.Remote;
+
+import java.rmi.RemoteException;
+
+import java.util.List;
+
+// Creating Remote interface for our application
+
+public interface Hello extends Remote {
+
+ List<Student> getStudents() throws RemoteException;
+
+}
+
+Server.java
+
+import java.rmi.registry.LocateRegistry;
+
+import java.rmi.registry.Registry;
+
+import java.rmi.RemoteException;
+
+import java.rmi.server.UnicastRemoteObject;
+
+public class Server {
+
+ public static void main(String args[]) {
+
+  try {
+
+   ImplExample obj = new ImplExample();
+
+   Hello stub = (Hello) UnicastRemoteObject.exportObject(obj, 0);
+
+   // Create RMI registry on port 1099
+
+   Registry registry = LocateRegistry.createRegistry(1099);
+
+   registry.rebind("Hello", stub);
+
+   System.err.println("Server ready");
+
+  } catch (Exception e) {
+
+   System.err.println("Server exception: " + e.toString());
+
+   e.printStackTrace();
+
+  }
+
+ }
+
+}
+
+Student.java
+
+import java.io.Serializable;
+
+public class Student implements Serializable {
+
+ private int id;
+
+ private String name, branch, email;
+
+ // Uncomment the following lines if you have these properties in your Student class
+
+ // private int percent;
+
+ // getters and setters
+
+}
+
+mplExample.java
+
+import java.sql.*;
+
+import java.util.ArrayList;
+
+import java.util.List;
+
+// Implementing the remote interface
+
+public class ImplExample implements Hello {
+
+ // Implementing the interface method
+
+ public List<Student> getStudents() throws Exception {
+
+  List<Student> list = new ArrayList<>();
+
+  String JDBC_DRIVER = "com.mysql.jdbc.Driver";
+
+  String DB_URL = "jdbc:mysql://localhost:3306/details1";
+
+  String USER = "root";
+
+  String PASS = "admin";
+
+  try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
+
+    Statement stmt = conn.createStatement();
+
+    ResultSet rs = stmt.executeQuery("SELECT * FROM bill")) {
+
+   while (rs.next()) {
+
+    int id = rs.getInt("bill_amount");
+
+    String name = rs.getString("consumer_name");
+
+    String branch = rs.getString("bill_due_date");
+
+    // Uncomment the following lines if you have these properties in your Student class
+
+    // int percent = rs.getInt("percentage");
+
+    // String email = rs.getString("email");
+
+    Student student = new Student();
+
+    student.setID(id);
+
+    student.setName(name);
+
+    student.setBranch(branch);
+
+    // student.setPercent(percent);
+
+    // student.setEmail(email);
+
+    list.add(student);
+
+   }
+
+  }
+
+  return list;
+
+ }
+
+}
+
+Step 1: Compile the Java Code
+
+Compile all the Java files using the javac command. Make sure you are in the directory where your Java files are located.
+
+bash
+
+javac Hello.java ImplExample.java Server.java Client.java Student.java
+
+Step 2: Start the RMI Registry (On the Server Side)
+
+Before running the server, you need to start the RMI registry. Open a new terminal or command prompt and run the following command:
+
+bash
+
+rmiregistry
+
+Step 3: Run the Server
+
+Open another terminal or command prompt and run the server:
+
+bash
+
+java Server
+
+The server should print "Server ready" if it starts successfully.
+
+Step 4: Run the Client
+
+Open another terminal or command prompt and run the client:
+
+bash
+
+java Client
+
+The client should connect to the server, retrieve the list of students from the MySQL database, and print their information.
+
+Notes:
+
+ Make sure your MySQL server is running.
+
+ Ensure that the MySQL JDBC driver JAR file is included in your classpath.
+
+ Update the MySQL database connection details (URL, username, and password) in ImplExample.java.
+
+ Ensure that the RMI registry is started on the default port (1099).
+
+ If you encounter any issues, check for error messages in the terminal or command prompt to diagnose the problem.\
+
+/////////////////////////
+
+Step 1: Set up MySQL database and create the Bill table:
+
+sql
+
+CREATE DATABASE Electric_Bill;
+
+USE Electric_Bill;
+
+CREATE TABLE Bill (
+
+ consumer_name VARCHAR(255),
+
+ bill_due_date DATE,
+
+ bill_amount DECIMAL(10, 2)
+
+);
+
+Step 2: Insert some sample data into the Bill table:
+
+sql
+
+INSERT INTO Bill (consumer_name, bill_due_date, bill_amount) VALUES
+
+('Consumer1', '2024-02-01', 150.00),
+
+('Consumer2', '2024-02-05', 200.50),
+
+('Consumer3', '2024-02-10', 120.75);
+
+-------------------------------------------------------------------------------------------------------
